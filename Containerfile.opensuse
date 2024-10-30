@@ -1,0 +1,64 @@
+# REPOSITORY                                    TAG            IMAGE ID      CREATED         SIZE
+# localhost/teknikuglen/ansible-runner          latest         3c36371e577d  11 minutes ago  709 MB
+
+
+# Stage 1: Build stage to install Ansible and dependencies
+FROM opensuse/tumbleweed:latest as builder
+
+# Install build dependencies and Python tools
+RUN zypper -n install \
+    python3 \
+    python3-pip \
+    python3-virtualenv \
+    gcc \
+    libffi-devel \
+    openssl-devel \
+    git \
+    openssh \
+    sshpass \
+    && zypper clean -a
+
+# Create a Python virtual environment for Ansible
+RUN python3 -m venv /opt/ansible-venv \
+    && /opt/ansible-venv/bin/pip install --no-cache-dir ansible
+
+
+# Stage 2: Final runtime image with minimal dependencies
+FROM opensuse/tumbleweed:latest
+
+# Install runtime dependencies
+RUN zypper -n install \
+    python3 \
+    openssh \
+    sshpass \
+    git \
+    && zypper clean -a \
+    && rm -rf /var/cache/zypper
+
+# Copy the virtual environment from the builder stage
+COPY --from=builder /opt/ansible-venv /opt/ansible-venv
+
+# Create ansible user and set up workdir
+RUN groupadd -g 1000 ansible \
+    && useradd -u 1000 -g ansible -m ansible \
+    && mkdir -p /home/ansible/.ssh \
+    && chown ansible:ansible /home/ansible/.ssh \
+    && chmod 700 /home/ansible/.ssh \
+    && mkdir -p /home/ansible/workdir \
+    && chown ansible:ansible /home/ansible/workdir \
+    && chmod 755 /home/ansible/workdir
+
+# Copy SSH config
+COPY --chmod=600 --chown=ansible:ansible resources/ssh_config /home/ansible/.ssh/config
+
+# Copy the entrypoint script
+COPY --chmod=555 resources/container-entrypoint.sh /usr/local/bin/
+
+WORKDIR /home/ansible/workdir
+
+VOLUME ["/home/ansible/workdir"]
+
+USER ansible
+
+ENTRYPOINT [ "/usr/local/bin/container-entrypoint.sh" ]
+CMD [ "ansible-playbook" ]

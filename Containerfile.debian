@@ -1,0 +1,47 @@
+# REPOSITORY                                    TAG            IMAGE ID      CREATED             SIZE
+# localhost/teknikuglen/ansible-runner          latest         5f586194d0b2  About a minute ago  586 MB
+
+# Stage 1: Build stage to install Ansible and dependencies
+FROM debian:bullseye-slim as builder
+
+# Install Python and pip in the builder stage
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip python3-venv \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment and install Ansible
+RUN python3 -m venv /opt/ansible-venv \
+    && /opt/ansible-venv/bin/pip install --no-cache-dir ansible
+
+
+# Stage 2: Final image with minimal runtime dependencies
+FROM debian:bullseye-slim
+
+# Copy the virtual environment from the builder stage
+COPY --from=builder /opt/ansible-venv /opt/ansible-venv
+
+# Setup the ansible user and workdir as before
+RUN groupadd -g 1000 ansible \
+    && useradd -u 1000 -g ansible -m ansible \
+    && mkdir -p /home/ansible/.ssh \
+    && chown ansible:ansible /home/ansible/.ssh \
+    && chmod 700 /home/ansible/.ssh \
+    && mkdir -p /home/ansible/workdir \
+    && chown ansible:ansible /home/ansible/workdir \
+    && chmod 755 /home/ansible/workdir
+
+# Copy SSH config
+COPY --chmod=600 --chown=ansible:ansible resources/ssh_config /home/ansible/.ssh/config
+
+# Copy entrypoint script
+COPY --chmod=555 resources/container-entrypoint.sh /usr/local/bin/
+
+WORKDIR /home/ansible/workdir
+
+VOLUME ["/home/ansible/workdir"]
+
+USER ansible
+
+ENTRYPOINT [ "container-entrypoint.sh" ]
+CMD [ "ansible-playbook" ]

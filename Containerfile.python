@@ -1,0 +1,55 @@
+# REPOSITORY                                    TAG            IMAGE ID      CREATED         SIZE
+# localhost/teknikuglen/ansible-runner          latest         7606dc2d5fe5  18 seconds ago  613 MB
+
+# Stage 1: Build stage to install Ansible and dependencies
+FROM python:3.10-slim as builder
+
+# Install necessary dependencies for Ansible
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-client \
+    sshpass \
+    git \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create a virtual environment for Ansible
+RUN python3 -m venv /opt/ansible-venv \
+    && /opt/ansible-venv/bin/pip install --no-cache-dir ansible
+
+
+# Stage 2: Final runtime image with minimal dependencies
+FROM python:3.10-slim
+
+# Install minimal dependencies for runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-client \
+    sshpass \
+    git \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy the virtual environment from the builder stage
+COPY --from=builder /opt/ansible-venv /opt/ansible-venv
+
+# Create ansible user and set up workdir
+RUN adduser --disabled-password --gecos "" ansible \
+    && mkdir -p /home/ansible/.ssh \
+    && chown ansible:ansible /home/ansible/.ssh \
+    && chmod 700 /home/ansible/.ssh \
+    && mkdir -p /home/ansible/workdir \
+    && chown ansible:ansible /home/ansible/workdir \
+    && chmod 755 /home/ansible/workdir
+
+# Copy SSH config
+COPY --chmod=600 --chown=ansible:ansible resources/ssh_config /home/ansible/.ssh/config
+
+# Copy entrypoint script
+COPY --chmod=555 resources/container-entrypoint.sh /usr/local/bin/
+
+WORKDIR /home/ansible/workdir
+
+VOLUME ["/home/ansible/workdir"]
+
+USER ansible
+
+# Set entrypoint to the script that activates the venv and runs the command
+ENTRYPOINT [ "/usr/local/bin/container-entrypoint.sh" ]
+CMD [ "ansible-playbook" ]
