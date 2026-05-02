@@ -1,5 +1,8 @@
 # Ansible in a Container
 
+> [!Warning]
+> Moved to codeberg [https://codeberg.org/TeknikUglen/podman-ansible](https://codeberg.org/TeknikUglen/podman-ansible)
+
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/isc)
 [![Podman](https://img.shields.io/badge/Podman-grey?logo=podman&logoColor=ffffff)](https://github.com/containers/podman)
 [![Ansible](https://img.shields.io/badge/Automation-Ansible-green)](https://ansible.com)
